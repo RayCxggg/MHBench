@@ -1,10 +1,20 @@
 # External network is not managed by terraform, need to set as datasource
 data "openstack_networking_network_v2" "external_network" {
-  name = "external"
+  name = var.external_network
 }
 
 variable "key_name" {
   description = "The name of the key pair to use for the instance"
+}
+
+variable "flavor" {
+  description = "Flavor for the management host"
+  default     = "m1.small"
+}
+
+variable "external_network" {
+  description = "Name of the provider network used for the router gateway and floating IPs"
+  default     = "external"
 }
 
 output "external_network_id" {
@@ -59,7 +69,7 @@ resource "openstack_networking_router_interface_v2" "router_interface_manage_ext
 resource "openstack_compute_instance_v2" "manage_host" {
   name        = "manage_host"
   image_name  = "Ubuntu20"
-  flavor_name = "m1.small"
+  flavor_name = var.flavor
   key_pair    = var.key_name
   security_groups = [
     openstack_networking_secgroup_v2.talk_to_manage.name,
@@ -74,7 +84,7 @@ resource "openstack_compute_instance_v2" "manage_host" {
 }
 
 resource "openstack_networking_floatingip_v2" "manage_floating_ip" {
-  pool = "external"
+  pool = var.external_network
 }
 
 resource "openstack_compute_floatingip_associate_v2" "fip_manage" {

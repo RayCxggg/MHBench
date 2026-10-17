@@ -1,0 +1,21 @@
+{
+  "elastic_config": {
+    "api_key": "ELASTIC_API_KEY",
+    "port": 9200
+  },
+  "openstack_config": {
+    "ssh_key_name": "perry_key",
+    "ssh_key_path": "~/.ssh/perry_key",
+    "perry_key_name": "perry_key",
+    "openstack_auth_url": "https://js2.jetstream-cloud.org:5000/v3/",
+    "openstack_region": "IU",
+    "application_credential_id": "APP_CRED_ID",
+    "application_credential_secret": "APP_CRED_SECRET",
+    "host_flavor": "m3.tiny",
+    "manage_flavor": "m3.tiny",
+    "attacker_flavor": "m3.small",
+    "external_network": "public"
+  },
+  "external_ip": "CONTROLLER_PRIVATE_IP",
+  "experiment_timeout_minutes": 75
+}

@@ -2,8 +2,12 @@ import time
 
 import openstack.compute.v2.server
 import openstack.image.v2.image
-from src.terraform_helpers import deploy_network
-from src.utility.openstack_helper_functions import teardown_helper
+from src.terraform_helpers import (
+    deploy_network,
+    deployed_topologies,
+    destroy_network,
+    managed_resource_ids,
+)
 import openstack
 from openstack.connection import Connection
 from ansible.ansible_runner import AnsibleRunner
@@ -23,12 +27,18 @@ from src.utility.logging import get_logger
 
 logger = get_logger()
 
+MANAGE_HOST_NAME = "manage_host"
+# Image property marking snapshots created by MHBench
+SNAPSHOT_TAG = "mhbench_snapshot"
+
 
 def find_manage_server(
     conn,
 ) -> tuple[openstack.compute.v2.server.Server | None, str | None]:
-    """Finds any server with a floating IP and returns the first one found."""
+    """Finds the MHBench management host and returns its floating IP."""
     for server in conn.compute.servers():
+        if server.name != MANAGE_HOST_NAME:
+            continue
         for network, network_attrs in server.addresses.items():
             for addr_info in network_attrs:
                 # Check if this address is a floating IP
@@ -78,10 +88,7 @@ class TerraformDeployer:
                 break
             except Exception:
                 errors += 1
-                hosts: openstack.compute.v2.server.Server = (
-                    self.openstack_conn.list_servers()
-                )  # type: ignore
-                for host in hosts:
+                for host in self.managed_servers():
                     if "attacker" in host.name:
                         self.load_snapshot(host, wait=True)
                         time.sleep(15)
@@ -94,26 +101,53 @@ class TerraformDeployer:
     def parse_network(self):
         return
 
+    def managed_servers(self) -> list:
+        """Servers created by MHBench: tracked in Terraform state, or attached to
+        an MHBench network (e.g. decoys added at runtime). Other servers in the
+        project, such as the controller, are never touched."""
+        server_ids = managed_resource_ids("openstack_compute_instance_v2")
+        network_ids = managed_resource_ids("openstack_networking_network_v2")
+        network_names = {
+            network.name
+            for network in self.openstack_conn.list_networks()
+            if network.id in network_ids
+        }
+        return [
+            server
+            for server in self.openstack_conn.list_servers()
+            if server.id in server_ids or network_names & set(server.addresses)
+        ]
+
     def teardown(self):
         print("Tearing down...")
 
+        # Delete servers Terraform does not track so it can remove their networks
+        tracked_ids = managed_resource_ids("openstack_compute_instance_v2")
+        for server in self.managed_servers():
+            if server.id not in tracked_ids:
+                self.openstack_conn.delete_server(server.id, wait=True)
+
+        for topology in deployed_topologies():
+            destroy_network(topology, self.config)
+
+    def check_no_untracked_resources(self):
+        """Refuse to deploy over MHBench resources whose Terraform state is lost."""
         conn = self.openstack_conn
-
-        teardown_helper.delete_instances(conn)
-        while conn.list_servers():
-            time.sleep(0.5)
-
-        teardown_helper.delete_floating_ips(conn)
-        while conn.list_floating_ips():
-            time.sleep(0.5)
-
-        teardown_helper.delete_routers(conn)
-        while conn.list_routers():
-            time.sleep(0.5)
-
-        teardown_helper.delete_subnets(conn)
-        teardown_helper.delete_networks(conn)
-        teardown_helper.delete_security_groups(conn)
+        leftovers = [
+            f"server {server.name}"
+            for server in conn.list_servers()
+            if server.name in (MANAGE_HOST_NAME, "attacker")
+        ]
+        leftovers += [
+            f"router {router.name}"
+            for router in conn.list_routers()
+            if router.name == "router_external"
+        ]
+        if leftovers:
+            raise Exception(
+                f"MHBench resources not tracked by Terraform state exist: {leftovers}. "
+                "Delete them manually before deploying."
+            )
 
     def compile(self, setup_network: bool = True, setup_hosts: bool = True):
         if setup_network:
@@ -161,6 +195,7 @@ class TerraformDeployer:
 
     def deploy_topology(self):
         self.teardown()
+        self.check_no_untracked_resources()
         deploy_network(self.topology, self.config)
 
     def find_management_server(self):
@@ -177,7 +212,7 @@ class TerraformDeployer:
 
         logger.debug(f"Creating snapshot {snapshot_name} for instance {host.id}...")
         image = self.openstack_conn.create_image_snapshot(
-            snapshot_name, host.id, wait=True
+            snapshot_name, host.id, wait=True, **{SNAPSHOT_TAG: "true"}
         )
         return image.id
 
@@ -206,20 +241,24 @@ class TerraformDeployer:
     def save_all_snapshots(self, wait=True):
         logger.debug("Saving all snapshots...")
         images = []
-        for instance in self.openstack_conn.list_servers():
+        for instance in self.managed_servers():
             image = self.save_snapshot(instance)
             images.append(image)
 
     def clean_snapshots(self):
         logger.debug("Cleaning all snapshots...")
+        project_id = self.openstack_conn.current_project_id
         images = self.openstack_conn.list_images()
         for image in images:
-            if "_image" in image.name:
+            if (
+                image.owner == project_id
+                and image.properties.get(SNAPSHOT_TAG) == "true"
+            ):
                 self.openstack_conn.delete_image(image.id, wait=True)
 
     def load_all_snapshots(self, wait=True):
         logger.debug("Loading all snapshots...")
-        hosts: openstack.compute.v2.server.Server = self.openstack_conn.list_servers()  # type: ignore
+        hosts = self.managed_servers()
 
         # Check if all images exist
         hosts_to_rebuild = []
@@ -281,7 +320,7 @@ class TerraformDeployer:
         return
 
     def get_error_hosts(self):
-        hosts: openstack.compute.v2.server.Server = self.openstack_conn.list_servers()  # type: ignore
+        hosts = self.managed_servers()
         error_hosts = []
 
         for host in hosts:

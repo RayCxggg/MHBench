@@ -8,3 +8,5 @@
 !config.py
 # And config_service.py
 !config_service.py
+# And the Jetstream2 example
+!config_jetstream2_example.json

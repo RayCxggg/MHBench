@@ -7,22 +7,38 @@ terraform {
   }
 }
 
-# No default value
+# Password auth (username/password/project) or application credential auth
+# (id/secret) must be provided. Application credentials take precedence.
 variable "project_name" {
   type        = string
   description = "Openstack project"
+  default     = null
 }
 
-# No default value
 variable "openstack_username" {
   type        = string
   description = "Openstack username"
+  default     = null
 }
 
-# default value for the variable location
 variable "openstack_password" {
   type        = string
   description = "Openstack password"
+  default     = null
+  sensitive   = true
+}
+
+variable "application_credential_id" {
+  type        = string
+  description = "Openstack application credential ID"
+  default     = null
+}
+
+variable "application_credential_secret" {
+  type        = string
+  description = "Openstack application credential secret"
+  default     = null
+  sensitive   = true
 }
 
 variable "openstack_auth_url" {
@@ -40,15 +56,42 @@ variable "perry_key_name" {
   description = "Name of the keypair to use for the Perry instance"
 }
 
-# Configure the OpenStack Provider
-provider "openstack" {
-  user_name   = var.openstack_username
-  tenant_name = var.project_name
-  password    = var.openstack_password
-  auth_url    = var.openstack_auth_url
-  region      = var.openstack_region
-  insecure    = "true"
+variable "host_flavor" {
+  type        = string
+  description = "Flavor for target hosts"
+  default     = "p2.tiny"
 }
 
+variable "manage_flavor" {
+  type        = string
+  description = "Flavor for the management host"
+  default     = "m1.small"
+}
 
+variable "attacker_flavor" {
+  type        = string
+  description = "Flavor for the attacker host"
+  default     = "m1.small"
+}
 
+variable "external_network" {
+  type        = string
+  description = "Name of the provider network used for the router gateway and floating IPs"
+  default     = "external"
+}
+
+locals {
+  use_app_cred = var.application_credential_id != null
+}
+
+# Configure the OpenStack Provider
+provider "openstack" {
+  user_name                     = local.use_app_cred ? null : var.openstack_username
+  tenant_name                   = local.use_app_cred ? null : var.project_name
+  password                      = local.use_app_cred ? null : var.openstack_password
+  application_credential_id     = var.application_credential_id
+  application_credential_secret = var.application_credential_secret
+  auth_url                      = var.openstack_auth_url
+  region                        = var.openstack_region
+  insecure                      = "true"
+}

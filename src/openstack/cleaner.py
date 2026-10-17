@@ -4,10 +4,21 @@ import time
 
 
 class OpenstackCleaner:
-    def __init__(self, openstack_conn: Connection):
+    def __init__(
+        self, openstack_conn: Connection, allow_project_wide_cleanup: bool = False
+    ):
         self.openstack_conn = openstack_conn
+        self.allow_project_wide_cleanup = allow_project_wide_cleanup
 
     def clean_environment(self):
+        if not self.allow_project_wide_cleanup:
+            raise RuntimeError(
+                "Cleaning a generated environment deletes every server, floating IP, "
+                "router, network and security group in the OpenStack project. Set "
+                "openstack_config.allow_project_wide_cleanup to true only if the "
+                "project is dedicated to MHBench."
+            )
+
         print("Tearing down...")
 
         conn = self.openstack_conn

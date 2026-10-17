@@ -1,14 +1,17 @@
 ######### Setup Networking #########
 # External network is not managed by terraform, need to set as datasource
 module "perry_manager" {
-  source   = "../modules/perry_manager"
-  key_name = var.perry_key_name
+  source           = "../modules/perry_manager"
+  key_name         = var.perry_key_name
+  flavor           = var.manage_flavor
+  external_network = var.external_network
 }
 
 module "attacker" {
   source             = "../modules/attacker"
   router_external_id = module.perry_manager.router_external_id
   key_name           = var.perry_key_name
+  flavor             = var.attacker_flavor
 }
 
 resource "openstack_networking_network_v2" "employee_one_network" {
@@ -77,7 +80,7 @@ resource "openstack_compute_instance_v2" "employee_one" {
   count       = 10
   name        = "employee_A_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -97,7 +100,7 @@ resource "openstack_compute_instance_v2" "manage_employee_one" {
   count       = 1
   name        = "manage_A_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -116,7 +119,7 @@ resource "openstack_compute_instance_v2" "employee_two" {
   count       = 10
   name        = "employee_B_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -135,7 +138,7 @@ resource "openstack_compute_instance_v2" "manage_employee_two" {
   count       = 1
   name        = "manage_B_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -153,7 +156,7 @@ resource "openstack_compute_instance_v2" "ot_sensors" {
   count       = 20
   name        = "sensor_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -161,7 +164,7 @@ resource "openstack_compute_instance_v2" "ot_sensors" {
   ]
 
   network {
-    name        = "ot_network"
+    name        = "OT_network"
     fixed_ip_v4 = "192.168.203.${count.index + 10}"
   }
 
@@ -172,7 +175,7 @@ resource "openstack_compute_instance_v2" "ot_hosts" {
   count       = 5
   name        = "control_host_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -180,7 +183,7 @@ resource "openstack_compute_instance_v2" "ot_hosts" {
   ]
 
   network {
-    name        = "ot_network"
+    name        = "OT_network"
     fixed_ip_v4 = "192.168.203.${count.index + 50}"
   }
 

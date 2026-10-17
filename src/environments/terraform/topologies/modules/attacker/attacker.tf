@@ -5,6 +5,10 @@ variable "router_external_id" {
 variable "key_name" {
   description = "The key name to use for the instances"
 }
+variable "flavor" {
+  description = "Flavor for the attacker host"
+  default     = "m1.small"
+}
 
 resource "openstack_networking_network_v2" "attacker_network" {
   name           = "attacker_network"
@@ -29,7 +33,7 @@ resource "openstack_networking_router_interface_v2" "router_interface_manage_att
 resource "openstack_compute_instance_v2" "attacker" {
   name        = "attacker"
   image_name  = "Kali"
-  flavor_name = "m1.small"
+  flavor_name = var.flavor
   key_pair    = var.key_name
   security_groups = [
     openstack_networking_secgroup_v2.attacker.name

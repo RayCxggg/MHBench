@@ -21,6 +21,14 @@ def create_openstack_connection(openstack_cfg):
     Build an OpenStack connection directly from the app config instead of
     relying on a clouds.yml entry.
     """
+    if openstack_cfg.uses_application_credential:
+        return openstack.connect(
+            auth_type="v3applicationcredential",
+            auth_url=openstack_cfg.openstack_auth_url,
+            application_credential_id=openstack_cfg.application_credential_id,
+            application_credential_secret=openstack_cfg.application_credential_secret,
+            region_name=openstack_cfg.openstack_region,
+        )
     return openstack.connect(
         auth_url=openstack_cfg.openstack_auth_url,
         username=openstack_cfg.openstack_username,

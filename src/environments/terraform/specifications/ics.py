@@ -32,7 +32,7 @@ class ICSEnvironment(TerraformDeployer):
         openstack_conn,
         caldera_ip,
         config: Config,
-        topology="ics_inspired",
+        topology="enterprise_c",
     ):
         super().__init__(ansible_runner, openstack_conn, caldera_ip, config)
         self.topology = topology

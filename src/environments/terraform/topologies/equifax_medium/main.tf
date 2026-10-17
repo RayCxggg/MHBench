@@ -1,13 +1,16 @@
 ######### Setup Networking #########
 module "perry_manager" {
-  source   = "../modules/perry_manager"
-  key_name = var.perry_key_name
+  source           = "../modules/perry_manager"
+  key_name         = var.perry_key_name
+  flavor           = var.manage_flavor
+  external_network = var.external_network
 }
 
 module "attacker" {
   source             = "../modules/attacker"
   router_external_id = module.perry_manager.router_external_id
   key_name           = var.perry_key_name
+  flavor             = var.attacker_flavor
 }
 
 resource "openstack_networking_network_v2" "webserver_network" {
@@ -57,7 +60,7 @@ resource "openstack_compute_instance_v2" "webserver" {
   count       = 2
   name        = "webserver_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,
@@ -78,7 +81,7 @@ resource "openstack_compute_instance_v2" "database" {
   count       = 24
   name        = "database_${count.index}"
   image_name  = "Ubuntu20"
-  flavor_name = "p2.tiny"
+  flavor_name = var.host_flavor
   key_pair    = var.perry_key_name
   security_groups = [
     module.perry_manager.talk_to_manage_name,

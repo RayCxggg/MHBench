@@ -46,6 +46,7 @@ class EnvGenDeployer:
 
         self.cleaner = OpenstackCleaner(
             openstack_conn=self.openstack_conn,
+            allow_project_wide_cleanup=self.config.openstack_config.allow_project_wide_cleanup,
         )
 
     def compile_environment(self, topology: NetworkTopology):
