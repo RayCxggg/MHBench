@@ -6,7 +6,7 @@ class InstallFalco(AnsiblePlaybook):
     def __init__(self, hosts: str | list[str], config: Config) -> None:
         self.name = "defender/falco/install_falco.yml"
 
-        es_host = f"https://{config.external_ip}:{config.elastic_config.port}"
+        es_host = f"http://{config.external_ip}:{config.elastic_config.port}"
 
         self.params = {
             "host": hosts,

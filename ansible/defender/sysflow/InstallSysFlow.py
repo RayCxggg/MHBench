@@ -22,7 +22,7 @@ class InstallSysFlow(AnsiblePlaybook):
         for processor in pipeline_template["pipeline"]:
             if processor["processor"] == "exporter":
                 processor["es.addresses"] = (
-                    "https://"
+                    "http://"
                     + config.external_ip
                     + ":"
                     + str(config.elastic_config.port)

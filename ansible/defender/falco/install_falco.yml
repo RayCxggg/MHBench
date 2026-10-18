@@ -44,11 +44,37 @@
     args:
       creates: /etc/apt/sources.list.d/falcosecurity.list
 
-  - name: Install Falco engine & eBPF driver
+  # Falco's postinst auto-builds a driver (modern_ebpf then kmod via dkms) under
+  # `set -e`; on kernel <5.8 (e.g. Ubuntu 20.04 / 5.4) modern_ebpf is unsupported
+  # and this aborts dpkg --configure. Install the engine with the driver build
+  # skipped, then attach the kmod explicitly via falcoctl.
+  - name: Install Falco engine (driver build deferred)
     apt:
       name: "{{ 'falco=' + falco_version if falco_version else 'falco' }}"
       state: present
       update_cache: yes
+    environment:
+      FALCO_DRIVER_CHOICE: none
+      FALCO_FRONTEND: noninteractive
+      FALCOCTL_ENABLED: "no"
+
+  - name: Configure falcoctl to use the kmod driver
+    command: falcoctl driver config --type kmod
+    changed_when: true
+
+  - name: Install the Falco kmod driver (prebuilt download for this kernel, else dkms build)
+    command: falcoctl driver install
+    changed_when: true
+
+  - name: Make the kmod available to modprobe (copy into /lib/modules + depmod)
+    shell: |
+      set -e
+      ko=$(ls /root/.falco/*/{{ ansible_architecture }}/falco_*.ko 2>/dev/null | head -1)
+      test -n "$ko"
+      mkdir -p /lib/modules/$(uname -r)/updates
+      cp "$ko" /lib/modules/$(uname -r)/updates/falco.ko
+      depmod -a
+    changed_when: true
 
   - name: Create Falco configuration from template
     copy:
@@ -125,7 +151,7 @@
       state: started
       enabled: yes
     loop:
-      - falco
+      - falco-kmod
       - falcosidekick
 
   handlers:
@@ -134,5 +160,5 @@
         daemon_reload: yes
     - name: Restart Falco
       systemd:
-        name: falco
+        name: falco-kmod
         state: restarted

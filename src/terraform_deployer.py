@@ -177,13 +177,23 @@ class TerraformDeployer:
         self.ansible_runner.run_playbook(InstallKaliPackages(self.attacker_host.ip))
         self.ansible_runner.run_playbook(CreateSSHKey(self.attacker_host.ip, "root"))
 
-        # Install sysflow on all hosts
-        self.ansible_runner.run_playbook(
-            InstallSysFlow(self.network.get_all_host_ips(), self.config)
-        )
-        self.ansible_runner.run_playbook(
-            InstallFalco(self.network.get_all_host_ips(), self.config)
-        )
+        # Defender telemetry (SysFlow + Falco) forwards to Elastic
+        # (config.elastic_config). Only install it when Elastic is actually
+        # configured; otherwise Falco's install fails and the agents would have
+        # nowhere to ship. Attack traces are collected from PentestGPT, not here.
+        es_key = getattr(self.config.elastic_config, "api_key", None)
+        if es_key and es_key != "ELASTIC_API_KEY":
+            self.ansible_runner.run_playbook(
+                InstallSysFlow(self.network.get_all_host_ips(), self.config)
+            )
+            self.ansible_runner.run_playbook(
+                InstallFalco(self.network.get_all_host_ips(), self.config)
+            )
+        else:
+            logger.warning(
+                "Elastic not configured (elastic_config.api_key is unset/placeholder); "
+                "skipping SysFlow/Falco defender install."
+            )
 
     def setup(self):
         self.find_management_server()

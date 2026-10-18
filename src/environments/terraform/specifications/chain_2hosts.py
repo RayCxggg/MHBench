@@ -77,10 +77,15 @@ class Chain2Hosts(TerraformDeployer):
 
         self.ansible_runner.run_playbook(InstallKaliPackages(self.attacker_host.ip))
 
-        # Install sysflow on all hosts
-        self.ansible_runner.run_playbook(
-            InstallSysFlow(self.network.get_all_host_ips(), self.config)
-        )
+        # Install sysflow on all hosts (defender telemetry) — skip unless Elastic
+        # is configured; mirrors the guard in terraform_deployer.setup_base_packages.
+        es_key = getattr(self.config.elastic_config, "api_key", None)
+        if es_key and es_key != "ELASTIC_API_KEY":
+            self.ansible_runner.run_playbook(
+                InstallSysFlow(self.network.get_all_host_ips(), self.config)
+            )
+        else:
+            log_event("Deployment Instance", "Elastic not configured; skipping SysFlow")
 
         # Setup users on all hosts
         for host in self.network.get_all_hosts():
