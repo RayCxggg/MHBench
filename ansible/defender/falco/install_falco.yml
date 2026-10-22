@@ -15,6 +15,11 @@
     # -------------------------------------------------------------------
 
   tasks:
+  - name: Configure apt download retries (resilient to transient Ubuntu-mirror failures)
+    copy:
+      dest: /etc/apt/apt.conf.d/99retries
+      content: 'Acquire::Retries "8";'
+
   - name: Ensure base packages are present
     apt:
       name:
@@ -62,9 +67,19 @@
     command: falcoctl driver config --type kmod
     changed_when: true
 
+  - name: Ensure clean Falco driver state (so falcoctl can (re)install idempotently)
+    shell: |
+      systemctl stop falco-kmod falco-bpf falco-modern-bpf falco falcosidekick 2>/dev/null || true
+      pkill -x falco 2>/dev/null || true
+      rmmod falco 2>/dev/null || true
+      exit 0
+    changed_when: false
+
   - name: Install the Falco kmod driver (prebuilt download for this kernel, else dkms build)
     command: falcoctl driver install
     changed_when: true
+    register: falco_driver_install
+    failed_when: false
 
   - name: Make the kmod available to modprobe (copy into /lib/modules + depmod)
     shell: |

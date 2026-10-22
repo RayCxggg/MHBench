@@ -3,6 +3,11 @@
   remote_user: root
 
   tasks:
+    - name: Configure apt download retries (resilient to transient Ubuntu-mirror failures)
+      copy:
+        dest: /etc/apt/apt.conf.d/99retries
+        content: 'Acquire::Retries "8";'
+
     - name: Remove automatic updates
       apt:
         name: unattended-upgrades
